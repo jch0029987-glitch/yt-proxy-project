@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Keyboard,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -25,11 +24,8 @@ export default function App() {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const videoPlayer = useRef(null);
 
-  // 🔥 Fix localhost for Android emulator / device
-  const TERMUX_URL =
-    Platform.OS === 'android'
-      ? 'http://10.0.2.2:8080'
-      : 'http://localhost:8080';
+  // 🔥 Termux local server
+  const TERMUX_URL = "http://127.0.0.1:8080";
 
   /* =========================
      🔍 SEARCH
@@ -47,7 +43,7 @@ export default function App() {
       const data = await res.json();
       setVideos(data);
     } catch {
-      alert('Backend offline — check Termux server & IP.');
+      alert('Backend offline — check Termux server.');
     } finally {
       setLoading(false);
     }
@@ -72,13 +68,13 @@ export default function App() {
       const format = data.formats[0];
       const streamUrl = format.url;
 
-      // 🔥 Fetch comments in parallel
+      // 🔥 Fetch comments
       fetch(`${TERMUX_URL}/comments/${videoId}`)
         .then(res => res.json())
         .then(setComments)
         .catch(() => {});
 
-      // 🔥 Lock landscape & fullscreen
+      // 🔥 Lock landscape & hide navigation bar
       await ScreenOrientation.lockAsync(
         ScreenOrientation.OrientationLock.LANDSCAPE
       );
