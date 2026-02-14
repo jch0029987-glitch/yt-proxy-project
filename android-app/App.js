@@ -20,7 +20,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const videoPlayer = useRef(null);
 
-  // ⚠️ Change if backend is not on same device
   const TERMUX_URL = 'http://localhost:8080';
 
   /* =========================
@@ -33,12 +32,12 @@ export default function App() {
     Keyboard.dismiss();
 
     try {
-      const response = await fetch(
+      const res = await fetch(
         `${TERMUX_URL}/search?q=${encodeURIComponent(search)}`
       );
-      const data = await response.json();
+      const data = await res.json();
       setVideos(data);
-    } catch (err) {
+    } catch {
       alert('Backend Offline: Check Termux server.');
     } finally {
       setLoading(false);
@@ -54,55 +53,48 @@ export default function App() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${TERMUX_URL}/video/${videoId}`);
-      const data = await response.json();
+      const res = await fetch(`${TERMUX_URL}/video/${videoId}`);
+      const data = await res.json();
 
-      if (!data.formats || data.formats.length === 0) {
-        throw new Error('No playable formats.');
+      if (!data.formats?.length) {
+        throw new Error('No formats');
       }
 
-      // Prefer progressive streams (audio + video)
       const format =
-        data.formats.find((f) => f.hasAudio && f.hasVideo) ||
+        data.formats.find(f => f.hasAudio && f.hasVideo) ||
         data.formats[0];
 
       const streamUrl = format.url;
 
-      // Load video
+      // 🔥 FORCE LANDSCAPE BEFORE FULLSCREEN
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.LANDSCAPE
+      );
+
       await videoPlayer.current.loadAsync(
         { uri: streamUrl },
         { shouldPlay: true },
         false
       );
 
-      // Open native fullscreen
       await videoPlayer.current.presentFullscreenPlayer();
     } catch (err) {
-      alert('Failed to resolve stream.');
+      alert('Failed to play video.');
     } finally {
       setLoading(false);
     }
   };
 
   /* =========================
-     🔄 FULLSCREEN ORIENTATION
+     🔄 FULLSCREEN EVENTS
   ========================== */
-  const onFullscreenUpdate = async ({ fullscreenUpdate }) => {
-    if (
-      fullscreenUpdate ===
-      Video.FULLSCREEN_UPDATE_PLAYER_WILL_PRESENT
-    ) {
-      // Force landscape before fullscreen opens
-      await ScreenOrientation.lockAsync(
-        ScreenOrientation.OrientationLock.LANDSCAPE
-      );
-    }
+  const onFullscreenUpdate = async (event) => {
+    const { fullscreenUpdate } = event;
 
     if (
-      fullscreenUpdate ===
-      Video.FULLSCREEN_UPDATE_PLAYER_DID_DISMISS
+      fullscreenUpdate === Video.FULLSCREEN_UPDATE_PLAYER_DID_DISMISS
     ) {
-      // Return to portrait when exiting fullscreen
+      // 🔄 Restore portrait when exiting
       await ScreenOrientation.lockAsync(
         ScreenOrientation.OrientationLock.PORTRAIT_UP
       );
@@ -136,18 +128,14 @@ export default function App() {
       <Video
         ref={videoPlayer}
         style={{ width: 0, height: 0 }}
-        useNativeControls
         resizeMode={ResizeMode.CONTAIN}
+        useNativeControls
         onFullscreenUpdate={onFullscreenUpdate}
       />
 
       {/* Loading */}
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#f00"
-          style={{ marginTop: 50 }}
-        />
+        <ActivityIndicator size="large" color="#f00" style={{ marginTop: 50 }} />
       ) : (
         <FlatList
           data={videos}
@@ -157,10 +145,7 @@ export default function App() {
               style={styles.card}
               onPress={() => startVideo(item.id)}
             >
-              <Image
-                source={{ uri: item.thumbnail }}
-                style={styles.thumb}
-              />
+              <Image source={{ uri: item.thumbnail }} style={styles.thumb} />
               <View style={styles.info}>
                 <Text style={styles.title} numberOfLines={2}>
                   {item.title}
