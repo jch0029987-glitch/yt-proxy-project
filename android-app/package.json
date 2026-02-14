@@ -4,6 +4,7 @@
     "expo": "~54.0.33",
     "expo-av": "~16.0.8",
     "expo-network": "~8.0.8",
+    "expo-screen-orientation": "^9.0.8",
     "express": "^5.2.1",
     "react": "19.1.0",
     "react-native": "0.81.5"
