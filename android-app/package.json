@@ -5,13 +5,17 @@
     "expo-av": "~16.0.8",
     "expo-network": "~8.0.8",
     "express": "^5.2.1",
-    "react-native": "0.81.5",
-    "react": "19.1.0"
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   },
   "name": "android-app",
   "version": "1.0.0",
   "scripts": {
     "android": "expo run:android",
     "ios": "expo run:ios"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@react-native/metro-config": "^0.84.0"
   }
 }
