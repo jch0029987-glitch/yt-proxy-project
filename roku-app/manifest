@@ -1,0 +1,31 @@
+# --- Application Identity ---
+title=YT Proxy Roku
+subtitle=Tor-Powered YouTube Client
+mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
+mm_icon_focus_sd=pkg:/images/icon_focus_sd.png
+major_version=1
+minor_version=1
+build_version=00001
+
+# --- Resolution Optimization ---
+# This is the most important line for sharpness. 
+# It tells Roku to use a 1080p coordinate system.
+ui_resolutions=fhd
+
+# --- Capabilities & Requirements ---
+# Ensures the device has enough memory for FHD textures
+run_as_process=1
+default_handler_enabled=1
+
+# --- Localization & Region ---
+# Adjust as needed for your location
+localization_default=en_US
+
+# --- Splash Screen ---
+# Optional: If you have these files, they will show on boot
+splash_screen_fhd=pkg:/images/splash_fhd.png
+splash_min_time=2000
+# Force the app to stay in memory to keep the Tor socket open
+run_as_process=1
+# Request more buffer memory
+max_content_buffer_size=20000000 

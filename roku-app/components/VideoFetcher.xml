@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="VideoFetcher" extends="Task" >
+  <interface>
+    <field id="requestType" type="string" />
+    <field id="payload" type="string" />
+    <field id="results" type="assocarray" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/VideoFetcher.brs" />
+  
+  <children>
+  </children>
+
+  <function name="runTask" /> 
+</component>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+  <children>
+    <Rectangle id="background" width="1920" height="1080" color="0x0F0F0FFF" />
+
+    <Rectangle id="sideTray" width="320" height="1080" color="0x1A1A1AFF">
+        <LabelList 
+            id="menuList" 
+            translation="[40, 120]" 
+            itemSize="[240, 80]" 
+            textSelectionColor="0xFFFFFFFF"
+            drawFocusFeedback="true" />
+    </Rectangle>
+
+    <Group id="contentArea" translation="[360, 0]">
+        <Label id="sectionTitle" text="Home" translation="[0, 60]" font="font:LargeBoldSystemFont" />
+        <PosterGrid
+            id="videoGrid"
+            translation="[0, 160]"
+            basePosterSize="[384, 216]" 
+            itemSpacing="[24, 60]"
+            numColumns="4"
+            numRows="3"
+            drawFocusFeedback="true"
+            captionDisplayMode="alwaysShow" />
+        <Label id="errorLabel" text="Ready" translation="[0, 540]" width="1520" horizAlign="center" visible="false" />
+    </Group>
+
+    <Video 
+        id="videoPlayer" 
+        width="1920" 
+        height="1080" 
+        visible="false" 
+        bufferMode="liberated" /> 
+  </children>
+
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+</component>
