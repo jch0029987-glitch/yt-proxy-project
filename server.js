@@ -1,193 +1,139 @@
 /**
- * SmartTube-Style Roku Backend (2026 Safe Version)
- * -----------------------------------------------
- * Features:
- *  - Trending (search-based, not blocked)
- *  - Search
- *  - Video playback (HLS for Roku)
- *  - Live stream detection
- *  - Channel live auto-detect
- *  - Proxy support (HTTP / SOCKS / per-request)
+ * SmartTube-Style Roku/Android Backend (v2.0)
+ * Optimized for Termux & Data Saving
  */
 
 const express = require("express");
 const { exec } = require("child_process");
+const axios = require("axios"); // npm install axios
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// Simple memory cache to save data/hotspot usage
+const cache = new Map();
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
+
 /* ==============================
-   PROXY SUPPORT
+   UTILITIES
 ============================== */
 
-function getProxyArg(req) {
-  if (req.query.proxy) return `--proxy ${req.query.proxy}`;
+function getProxyArg() {
   if (process.env.SOCKS_PROXY) return `--proxy ${process.env.SOCKS_PROXY}`;
   if (process.env.HTTP_PROXY) return `--proxy ${process.env.HTTP_PROXY}`;
   return "";
 }
 
-/* ==============================
-   RUN yt-dlp HELPER
-============================== */
-
 function run(cmd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) {
-        console.error("yt-dlp error:", stderr);
-        return reject(stderr);
-      }
+    // Increased buffer for large JSON responses from yt-dlp
+    exec(cmd, { maxBuffer: 1024 * 1024 * 5 }, (err, stdout, stderr) => {
+      if (err) return reject(stderr);
       resolve(stdout.trim());
     });
   });
 }
 
 /* ==============================
-   TRENDING (SAFE)
+   SPONSORBLOCK INTEGRATION
 ============================== */
 
-app.get("/api/trending", async (req, res) => {
+app.get("/api/skip/:id", async (req, res) => {
+  const { id } = req.params;
   try {
-    // Search-based trending (works everywhere)
-    const cmd = `yt-dlp "ytsearch20:trending videos US" --flat-playlist --print "%(id)s|%(title)s|%(thumbnail)s"`;
-    const out = await run(cmd);
-
-    const data = out.split("\n")
-      .map(line => {
-        const [id, title, thumb] = line.split("|");
-        return { id, title, thumb };
-      })
-      .filter(v => v.id);
-
-    res.json(data);
+    // Queries the public SponsorBlock API for skip segments
+    const url = `https://sponsor.ajay.app/api/skipSegments?videoID=${id}&categories=["sponsor","selfpromo","interaction","intro","outro"]`;
+    const response = await axios.get(url);
+    res.json(response.data);
   } catch (e) {
-    res.status(500).json({ error: "Trending failed" });
+    res.json([]); // Return empty if no segments found
   }
 });
 
 /* ==============================
-   LIVE NOW ROW
+   ENHANCED FEED (Home/Trending)
 ============================== */
 
-app.get("/api/live-now", async (req, res) => {
-  try {
-    const cmd = `yt-dlp "ytsearch15:live now" --flat-playlist --print "%(id)s|%(title)s|%(thumbnail)s"`;
-    const out = await run(cmd);
+app.get("/api/feed/:type", async (req, res) => {
+  const type = req.params.type || "trending";
+  const cacheKey = `feed_${type}`;
 
+  if (cache.has(cacheKey) && (Date.now() - cache.get(cacheKey).time < CACHE_TTL)) {
+    return res.json(cache.get(cacheKey).data);
+  }
+
+  try {
+    // Uses "InnerTube" (web) client via yt-dlp to get rich metadata
+    const query = type === "trending" ? "trending" : type;
+    const cmd = `yt-dlp "ytsearch25:${query}" --flat-playlist --print "%(id)s|%(title)s|%(thumbnail)s|%(duration_string)s|%(uploader)s"`;
+    
+    const out = await run(cmd);
     const data = out.split("\n").map(line => {
-      const [id, title, thumb] = line.split("|");
-      return { id, title, thumb };
+      const [id, title, thumb, duration, author] = line.split("|");
+      return { id, title, thumb, duration, author };
     }).filter(v => v.id);
 
+    cache.set(cacheKey, { time: Date.now(), data });
     res.json(data);
-  } catch {
-    res.status(500).json({ error: "Live failed" });
+  } catch (e) {
+    res.status(500).json({ error: "Feed fetch failed" });
   }
 });
 
 /* ==============================
-   SEARCH
+   THE "SMARTTUBE" EXTRACTOR
+============================== */
+
+app.get("/api/video/:id", async (req, res) => {
+  const { id } = req.params;
+  const proxy = getProxyArg();
+
+  try {
+    // Extract formats and info in one go to save requests
+    // Using --print to get exactly what the player needs
+    const cmd = `yt-dlp ${proxy} -g -f "best[ext=m3u8]/best" https://youtube.com/watch?v=${id}`;
+    const streamUrl = await run(cmd);
+
+    res.json({
+      id,
+      url: streamUrl,
+      // Pass back headers if needed for some players
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Extraction failed" });
+  }
+});
+
+/* ==============================
+   SEARCH (Optimized)
 ============================== */
 
 app.get("/api/search", async (req, res) => {
+  const q = req.query.q;
+  if (!q) return res.status(400).send("Missing query");
+
   try {
-    const q = req.query.q || "news";
-    const cmd = `yt-dlp "ytsearch20:${q}" --flat-playlist --print "%(id)s|%(title)s|%(thumbnail)s"`;
+    const cmd = `yt-dlp "ytsearch20:${q}" --flat-playlist --print "%(id)s|%(title)s|%(thumbnail)s|%(uploader)s"`;
     const out = await run(cmd);
-
     const data = out.split("\n").map(line => {
-      const [id, title, thumb] = line.split("|");
-      return { id, title, thumb };
+      const [id, title, thumb, author] = line.split("|");
+      return { id, title, thumb, author };
     }).filter(v => v.id);
-
     res.json(data);
-  } catch {
+  } catch (e) {
     res.status(500).json({ error: "Search failed" });
   }
 });
 
-/* ==============================
-   VIDEO STREAM (Roku Friendly)
-============================== */
-
-app.get("/api/video/:id", async (req, res) => {
-  try {
-    const proxyArg = getProxyArg(req);
-    const id = req.params.id;
-
-    const cmd = `yt-dlp ${proxyArg} -g -f "best[ext=m3u8]/best" https://youtube.com/watch?v=${id}`;
-    const stream = await run(cmd);
-
-    res.json({
-      id,
-      stream,
-      type: "video"
-    });
-  } catch {
-    res.status(500).json({ error: "Stream failed" });
-  }
-});
-
-/* ==============================
-   LIVE STREAM DETECTION
-============================== */
-
-app.get("/api/live/:id", async (req, res) => {
-  try {
-    const proxyArg = getProxyArg(req);
-    const id = req.params.id;
-
-    const infoCmd = `yt-dlp -J https://youtube.com/watch?v=${id}`;
-    const info = JSON.parse(await run(infoCmd));
-
-    if (!info.is_live) {
-      return res.json({ live: false });
-    }
-
-    const streamCmd = `yt-dlp ${proxyArg} -g -f "best[ext=m3u8]/best" https://youtube.com/watch?v=${id}`;
-    const stream = await run(streamCmd);
-
-    res.json({
-      live: true,
-      title: info.title,
-      stream
-    });
-  } catch {
-    res.status(500).json({ error: "Live check failed" });
-  }
-});
-
-/* ==============================
-   CHANNEL LIVE AUTO-DETECT
-============================== */
-
-app.get("/api/channel-live/:channel", async (req, res) => {
-  try {
-    const proxyArg = getProxyArg(req);
-    const channel = req.params.channel;
-
-    const cmd = `yt-dlp ${proxyArg} -g -f "best[ext=m3u8]/best" https://www.youtube.com/${channel}/live`;
-    const stream = await run(cmd);
-
-    res.json({ channel, stream });
-  } catch {
-    res.status(500).json({ error: "Channel live failed" });
-  }
-});
-
-/* ==============================
-   HEALTH CHECK
-============================== */
-
-app.get("/", (req, res) => {
-  res.send("SmartTube Roku Backend Running ✅");
-});
-
-/* ==============================
-   START SERVER
-============================== */
-
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 SmartTube Backend running on port ${PORT}`);
+  console.log(`
+  🚀 Improved SmartTube Backend
+  -----------------------------
+  Port: ${PORT}
+  Proxy: ${getProxyArg() || "None (Direct)"}
+  Local URL: http://localhost:${PORT}
+  `);
 });
